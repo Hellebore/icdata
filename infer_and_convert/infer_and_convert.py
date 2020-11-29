@@ -49,7 +49,7 @@ class InferType(object):
         return pd.api.types.infer_dtype(self._value)
 
     def validate(self) -> object:
-        vk = dict((v, k) for k, v in VALID_TYPES.items())
+        vk = {v: k for k, v in VALID_TYPES.items()}
         if self.value in list(VALID_TYPES.keys()):
             return VALID_TYPES[self.value]
         else:
@@ -148,18 +148,17 @@ class Schema:
     def __init__(self, *args, columns=None):
         if not args or not columns:
             raise SchemaArgumentError("args and columns required.")
+        if not all(list(map(lambda x: x in VALID_TYPES.keys(), args))) and not any(list(map(lambda x: x == "infer", args))):
+            raise SchemaArgumentError(
+                f"Invalid types. Check the types at {VALID_TYPES.keys()}")
+        self.mapped = {}
+        if len(args) == len(columns):
+            for arg, col in zip(args, columns):
+                # mapping column to type
+                self.mapped[col] = arg
         else:
-            if not all(list(map(lambda x: x in VALID_TYPES.keys(), args))) and not any(list(map(lambda x: x == "infer", args))):
-                raise SchemaArgumentError(
-                    f"Invalid types. Check the types at {VALID_TYPES.keys()}")
-            self.mapped = {}
-            if len(args) == len(columns):
-                for arg, col in zip(args, columns):
-                    # mapping column to type
-                    self.mapped[col] = arg
-            else:
-                raise SchemaArgumentError(
-                    "number of types does not match number of columns.")
+            raise SchemaArgumentError(
+                "number of types does not match number of columns.")
 
     def __repr__(self):
         return f"Schema({self.mapped})"
@@ -204,32 +203,32 @@ def ic_data(df: pd.DataFrame, schema: Schema, inplace=False, verbose=False):
         raise SchemaArgumentError("Number of columns do not match.")
     if verbose:
         print(f"Gathered columns: {schema.columns}")
-    if not columns == schema.columns:
+    if columns != schema.columns:
         raise SchemaArgumentError("Columns are not identical.")
 
     for t, c in zip(schema.types, columns):
         if verbose:
             print(f"{t}: {c}")
-        if (t not in VALID_TYPES.keys()) and (not t == "infer"):
+        if t not in VALID_TYPES.keys() and t != "infer":
             raise SchemaArgumentError(
                 f"{t} not a valid type. Check {list(VALID_TYPES.keys())}")
         if t == "infer":
             # infer types and convert
             it = InferType(df[c].values.tolist()).validate()
-            if not inplace:
-                new_df[c] = new_df[c].astype(it)
-            else:
+            if inplace:
                 df[c] = df[c].astype(it)
+            else:
+                new_df[c] = new_df[c].astype(it)
             if verbose:
                 print(f"{c}: changing to inferred type: {it}: [OK]")
         elif isinstance(df[c].dtype, VALID_TYPES[t]):
             if verbose:
                 print(f"{c} column: [UNCHANGED]")
         else:
-            if not inplace:
-                new_df[c] = new_df[c].astype(t)
-            else:
+            if inplace:
                 df[c] = df[c].astype(VALID_TYPES[t])
+            else:
+                new_df[c] = new_df[c].astype(t)
             if verbose:
                 print(f"{c}: [{df[c].dtype} => {VALID_TYPES[t]}: [OK]")
     if not inplace:
